@@ -1,0 +1,18 @@
+# Python environment
+venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+
+# Database
+instance/*.db
+
+# Private documents
+private_storage/*
+!private_storage/.gitkeep
+
+# Tests
+.pytest_cache/
+temp_backup/
