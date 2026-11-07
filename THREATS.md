@@ -35,7 +35,7 @@ The system supports administrators, document owners and authorized viewers/edito
 
 **Security controls:**
 - Passwords are stored as password hashes.
-- Passwords must contain at least eight characters during registration.
+- Passwords must contain at least eight characters, including uppercase letters, lowercase letters, numbers and special characters.
 - Login verifies the submitted password against the stored hash.
 
 **Testing:** Registration and login tests verify password hashing and incorrect-password rejection.
@@ -122,7 +122,7 @@ The project includes automated tests for:
 - Audit chain verification and tampering detection.
 - Invalid file uploads and unsafe deletion filenames.
 
-The current automated test suite contains 21 passing tests.
+The current automated test suite contains **23 passing tests**.
 
 ## 5. Remaining Security Improvements
 
@@ -136,9 +136,10 @@ The following improvements are planned or require further verification:
 - Configure HTTPS and production secrets.
 - Consider external immutable audit-log backups.
 - Perform additional security testing before production use.
+- Implement a secure administrator bootstrap process instead of manually assigning administrator privileges through the database.
 
 ## 6. Conclusion
 
 TrustVault uses authentication, server-side document permissions, private file storage, file validation and hash-linked audit records to improve document security.
 
-The system has passed its current 21 automated tests. However, passing these tests does not prove that the application is completely secure. Additional security testing and production hardening are required before handling real confidential documents.
+The system has passed its current **23 automated tests**. However, passing these tests does not prove that the application is completely secure. Additional security testing and production hardening are required before handling real confidential documents.
