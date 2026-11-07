@@ -1,29 +1,55 @@
 
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TrustVault | Dashboard</title>
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <style>
+        .access-expiry {
+            margin-top: 12px;
+            padding-top: 8px;
+            color: #e2e8f0;
+        }
+
+        .access-expiry hr {
+            border: none;
+            border-top: 1px solid #475569;
+            margin-bottom: 12px;
+        }
+
+        .access-expiry p {
+            color: #f8fafc;
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .access-expiry small {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+    </style>
 </head>
+
 <body>
 
     <header class="topbar">
         <div class="brand">
-    <svg viewBox="0 0 24 24" width="32" height="32"
-         fill="none" stroke="currentColor"
-         stroke-width="2.2" stroke-linecap="round"
-         stroke-linejoin="round">
-        <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/>
-        <path d="m9 12 2 2 4-4"/>
-    </svg>
-    <h2>TrustVault</h2>
-</div>
+            <svg viewBox="0 0 24 24" width="32" height="32"
+                 fill="none" stroke="currentColor"
+                 stroke-width="2.2" stroke-linecap="round"
+                 stroke-linejoin="round">
+                <path d="M12 22s8-4 8-11V5l-8-3-8 3v6c0 7 8 11 8 11z"/>
+                <path d="m9 12 2 2 4-4"/>
+            </svg>
+            <h2>TrustVault</h2>
+        </div>
+
         <div class="user-info">
             <span>Welcome, {{ current_user.name }}</span>
-
             <a href="{{ url_for('auth.change_password') }}">Change Password</a>
 
             {% if current_user.role == "admin" %}
@@ -45,9 +71,56 @@
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% for category, message in messages %}
-                <div class="message {{ category }} flash-message">{{ message }}</div>
+                <div class="message {{ category }} flash-message">
+                    {{ message }}
+                </div>
             {% endfor %}
         {% endwith %}
+
+        <!-- Downloaded Copy Warnings -->
+        {% if downloaded_copy_warnings %}
+            <section class="dashboard-card">
+                <h2>Downloaded Copy Warnings</h2>
+
+                {% for warning in downloaded_copy_warnings %}
+                    <div class="warning-card">
+                        <h3>Document Deleted by Owner</h3>
+
+                        <p>
+                            Your previously downloaded copy of
+                            <strong>{{ warning.filename }}</strong>
+                            may still exist on your device.
+                        </p>
+
+                        <p>
+                            Downloaded:
+                            {{ warning.downloaded_at.strftime("%d-%m-%Y %H:%M") }}
+                        </p>
+
+                        <p>
+                            Original document deleted:
+                            {{ warning.deleted_at.strftime("%d-%m-%Y %H:%M") }}
+                        </p>
+
+                        <p>
+                            TrustVault has blocked further access to the original
+                            document. Please handle your downloaded copy according
+                            to your organization's security policy.
+                        </p>
+
+                        <form method="POST"
+                              action="{{ url_for('documents.dismiss_download_warning', document_id=warning.id) }}">
+
+                            <input type="hidden"
+                                   name="csrf_token"
+                                   value="{{ csrf_token() }}">
+
+                            <button type="submit">Dismiss Warning</button>
+                        </form>
+                    </div>
+                {% endfor %}
+            </section>
+        {% endif %}
 
         <!-- Upload Document -->
         <section class="dashboard-card">
@@ -71,7 +144,7 @@
             </form>
         </section>
 
-        <!-- My Documents -->
+        <!-- My Documents and Shared Documents -->
         <section class="dashboard-card">
             <h2>My Documents and Shared Documents</h2>
 
@@ -91,7 +164,6 @@
                        value="{{ upload_date }}">
 
                 <button type="submit">Search</button>
-
                 <a href="{{ url_for('documents.dashboard') }}">Clear</a>
             </form>
 
@@ -99,7 +171,6 @@
                 <div class="document-list">
 
                     {% for document in documents %}
-
                         <div class="document-item">
 
                             <div>
@@ -108,16 +179,44 @@
                                 <p>Owner: {{ document.owner.name }}</p>
 
                                 {% if document.owner_id == current_user.id %}
-                                    <span class="status-label">My Document - Owner</span>
+                                    <span class="status-label">
+                                        My Document - Owner
+                                    </span>
                                 {% elif document.id in editable_document_ids %}
-                                    <span class="status-label">Shared With Me - Edit Access</span>
+                                    <span class="status-label">
+                                        Shared With Me - Edit Access
+                                    </span>
                                 {% else %}
-                                    <span class="status-label">Shared With Me - Read Access</span>
+                                    <span class="status-label">
+                                        Shared With Me - Read Access
+                                    </span>
+                                {% endif %}
+
+                                <!-- Access Expiry for Shared Documents -->
+                                {% if document.owner_id != current_user.id %}
+                                    {% set access_expiry = shared_expiry_by_document.get(document.id) %}
+
+                                    <div class="access-expiry">
+                                        <hr>
+
+                                        <p>
+                                            <strong>Access expires:</strong>
+
+                                            {% if access_expiry %}
+                                                {{ access_expiry.strftime("%d-%m-%Y %I:%M %p") }}
+                                            {% else %}
+                                                No expiry
+                                            {% endif %}
+                                        </p>
+
+                                        <small>
+                                            This information appears only for shared documents.
+                                        </small>
+                                    </div>
                                 {% endif %}
                             </div>
 
                             <div>
-
                                 <!-- Download -->
                                 <a href="{{ url_for('documents.download_document', document_id=document.id) }}">
                                     Download
@@ -125,7 +224,6 @@
 
                                 <!-- Edit Document -->
                                 {% if document.id in editable_document_ids %}
-
                                     <h4>Edit Document Details</h4>
 
                                     <form method="POST"
@@ -143,11 +241,9 @@
 
                                         <button type="submit">Update Document</button>
                                     </form>
-
                                 {% endif %}
 
                                 {% if document.owner_id == current_user.id %}
-
                                     <!-- Delete -->
                                     <form method="POST"
                                           action="{{ url_for('documents.delete_document_route', document_id=document.id) }}"
@@ -174,12 +270,8 @@
 
                                         <label>Choose Permission</label>
                                         <select name="permission" required>
-                                            <option value="read">
-                                                Read - View and Download
-                                            </option>
-                                            <option value="edit">
-                                                Edit - View, Download and Edit
-                                            </option>
+                                            <option value="read">Read - View and Download</option>
+                                            <option value="edit">Edit - View, Download and Edit</option>
                                         </select>
 
                                         <label>Access Expiry (Optional)</label>
@@ -198,12 +290,19 @@
                                     <h4>People with Access</h4>
 
                                     {% for permission in permissions_by_document.get(document.id, []) %}
-
                                         <div class="document-item">
                                             <div>
                                                 <p>Email: {{ permission.user.email }}</p>
                                                 <p>Permission: {{ permission.permission|upper }}</p>
-                                                <p>Expiry: {{ permission.expires_at or "No expiry" }}</p>
+
+                                                <p>
+                                                    Expiry:
+                                                    {% if permission.expires_at %}
+                                                        {{ permission.expires_at.strftime("%d-%m-%Y %I:%M %p") }}
+                                                    {% else %}
+                                                        No expiry
+                                                    {% endif %}
+                                                </p>
                                             </div>
 
                                             <form method="POST"
@@ -214,26 +313,18 @@
                                                 <button type="submit">Revoke Access</button>
                                             </form>
                                         </div>
-
                                     {% else %}
                                         <p>No users have access yet.</p>
                                     {% endfor %}
-
                                 {% endif %}
-
                             </div>
                         </div>
-
                     {% endfor %}
-
                 </div>
-
             {% else %}
                 <p class="empty-message">No documents available yet.</p>
             {% endif %}
-
         </section>
-
     </main>
 
     <script>

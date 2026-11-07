@@ -3,6 +3,7 @@ from werkzeug.utils import secure_filename
 from pathlib import Path
 from datetime import datetime, date, time, timezone
 from sqlalchemy import and_, or_
+from sqlalchemy.orm import aliased
 
 from flask import (
     Blueprint, render_template, request, redirect,
@@ -16,6 +17,7 @@ from app.models import Document, DocumentPermission, User, AuditLog
 from app.services.permissions import can_read_document, can_edit_document
 from app.services.storage import save_document, delete_document
 from app.services.audit import record_audit_event, verify_audit_chain
+from app.services.watermark import create_watermarked_copy
 
 documents = Blueprint("documents", __name__)
 
@@ -54,7 +56,6 @@ def dashboard():
         )
     )
 
-    # Search by document name, owner name, or owner email
     if search:
         query = query.where(
             or_(
@@ -64,11 +65,9 @@ def dashboard():
             )
         )
 
-    # Filter by category
     if category:
         query = query.where(Document.category == category)
 
-    # Filter by upload date
     if upload_date:
         try:
             selected_date = date.fromisoformat(upload_date)
@@ -81,11 +80,13 @@ def dashboard():
     documents_list = db.session.execute(
         query.distinct()
     ).scalars().all()
+
     editable_document_ids = {
-    document.id
-    for document in documents_list
-    if can_edit_document(current_user, document)
-}
+        document.id
+        for document in documents_list
+        if can_edit_document(current_user, document)
+    }
+
     owned_document_ids = db.select(Document.id).where(
         Document.owner_id == current_user.id,
         Document.is_deleted.is_(False)
@@ -104,15 +105,164 @@ def dashboard():
             permission.document_id, []
         ).append(permission)
 
+    # Get expiry information for documents shared with this user.
+    shared_expiry_by_document = {}
+
+    if documents_list:
+        shared_permissions = db.session.execute(
+            db.select(DocumentPermission).where(
+                DocumentPermission.user_id == current_user.id,
+                DocumentPermission.document_id.in_(
+                    [document.id for document in documents_list]
+                )
+            )
+        ).scalars().all()
+
+        shared_expiry_by_document = {
+            permission.document_id: permission.expires_at
+            for permission in shared_permissions
+        }
+
+    # Find documents downloaded by this user before deletion.
+    DownloadLog = aliased(AuditLog)
+    DeleteLog = aliased(AuditLog)
+
+    warning_rows = db.session.execute(
+        db.select(
+            Document,
+            DownloadLog.created_at,
+            DeleteLog.created_at
+        )
+        .join(
+            DownloadLog,
+            and_(
+                DownloadLog.document_id == Document.id,
+                DownloadLog.actor_id == current_user.id,
+                DownloadLog.action == "DOWNLOAD",
+                DownloadLog.outcome == "SUCCESS"
+            )
+        )
+        .join(
+            DeleteLog,
+            and_(
+                DeleteLog.document_id == Document.id,
+                DeleteLog.action == "DELETE",
+                DeleteLog.outcome == "SUCCESS",
+                DeleteLog.created_at >= DownloadLog.created_at
+            )
+        )
+        .where(Document.is_deleted.is_(True))
+        .order_by(DeleteLog.created_at.desc())
+    ).all()
+
+    # Find warnings already dismissed by this user.
+    dismissed_document_ids = set(
+        db.session.execute(
+            db.select(AuditLog.document_id).where(
+                AuditLog.actor_id == current_user.id,
+                AuditLog.action == "WARNING_DISMISSED",
+                AuditLog.outcome == "SUCCESS"
+            )
+        ).scalars().all()
+    )
+
+    downloaded_copy_warnings = []
+    seen_documents = set()
+
+    for document, downloaded_at, deleted_at in warning_rows:
+
+        if (
+            document.id not in seen_documents
+            and document.id not in dismissed_document_ids
+        ):
+            downloaded_copy_warnings.append({
+                "id": document.id,
+                "filename": document.original_filename,
+                "downloaded_at": downloaded_at,
+                "deleted_at": deleted_at
+            })
+
+            seen_documents.add(document.id)
+
     return render_template(
         "dashboard.html",
         documents=documents_list,
         permissions_by_document=permissions_by_document,
+        shared_expiry_by_document=shared_expiry_by_document,
         search=search,
         category=category,
         upload_date=upload_date,
-        editable_document_ids=editable_document_ids
+        editable_document_ids=editable_document_ids,
+        downloaded_copy_warnings=downloaded_copy_warnings
     )
+
+
+# Dismiss downloaded copy warning
+@documents.route(
+    "/warning/dismiss/<int:document_id>",
+    methods=["POST"]
+)
+@login_required
+def dismiss_download_warning(document_id):
+
+    document = db.session.get(Document, document_id)
+
+    if document is None or not document.is_deleted:
+        abort(404)
+
+    download_log = db.session.execute(
+        db.select(AuditLog)
+        .where(
+            AuditLog.document_id == document_id,
+            AuditLog.actor_id == current_user.id,
+            AuditLog.action == "DOWNLOAD",
+            AuditLog.outcome == "SUCCESS"
+        )
+        .order_by(AuditLog.created_at.desc())
+    ).scalars().first()
+
+    if download_log is None:
+        abort(403)
+
+    delete_log = db.session.execute(
+        db.select(AuditLog)
+        .where(
+            AuditLog.document_id == document_id,
+            AuditLog.action == "DELETE",
+            AuditLog.outcome == "SUCCESS",
+            AuditLog.created_at >= download_log.created_at
+        )
+        .order_by(AuditLog.created_at.desc())
+    ).scalars().first()
+
+    if delete_log is None:
+        abort(403)
+
+    already_dismissed = db.session.execute(
+        db.select(AuditLog.id).where(
+            AuditLog.document_id == document_id,
+            AuditLog.actor_id == current_user.id,
+            AuditLog.action == "WARNING_DISMISSED",
+            AuditLog.outcome == "SUCCESS"
+        )
+    ).scalar_one_or_none()
+
+    if already_dismissed is None:
+        record_audit_event(
+            current_user.id,
+            document_id,
+            "WARNING_DISMISSED",
+            "SUCCESS",
+            "User dismissed downloaded copy warning"
+        )
+
+        db.session.commit()
+
+    flash("Warning dismissed successfully.", "success")
+
+    return redirect(url_for("documents.dashboard"))
+
+
 # Upload document
 @documents.route("/upload", methods=["POST"])
 @login_required
@@ -167,7 +317,7 @@ def upload_document():
     return redirect(url_for("documents.dashboard"))
 
 
-# Download document
+# Download document with LeakTrace watermark
 @documents.route("/download/<int:document_id>")
 @login_required
 def download_document(document_id):
@@ -199,20 +349,37 @@ def download_document(document_id):
     if not file_path.is_file():
         abort(404)
 
-    record_audit_event(
-        current_user.id,
-        document.id,
-        "DOWNLOAD",
-        "SUCCESS",
-        "Document downloaded"
-    )
-    db.session.commit()
+    try:
+        watermarked_file, tracking_id = create_watermarked_copy(
+            file_path
+        )
 
-    return send_file(
-        file_path,
-        as_attachment=True,
-        download_name=document.original_filename
-    )
+        record_audit_event(
+            current_user.id,
+            document.id,
+            "DOWNLOAD",
+            "SUCCESS",
+            (
+                "TrustVault logo watermark applied"
+                if tracking_id is None
+                else f"LeakTrace watermark applied. Reference: {tracking_id}"
+            )
+        )
+
+        db.session.commit()
+
+        return send_file(
+            watermarked_file,
+            as_attachment=True,
+            download_name=document.original_filename
+        )
+
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Watermarked download failed")
+        flash("Download failed. Please try again.", "error")
+        return redirect(url_for("documents.dashboard"))
+
 
 # Edit document details
 @documents.route("/edit/<int:document_id>", methods=["POST"])
@@ -267,6 +434,8 @@ def edit_document(document_id):
     flash("Document details updated successfully!", "success")
 
     return redirect(url_for("documents.dashboard"))
+
+
 # Delete document (owner only)
 @documents.route("/delete/<int:document_id>", methods=["POST"])
 @login_required
@@ -316,6 +485,8 @@ def delete_document_route(document_id):
 
     return redirect(url_for("documents.dashboard"))
 
+
+# Share document
 @documents.route("/share/<int:document_id>", methods=["POST"])
 @login_required
 def share_document(document_id):
@@ -325,7 +496,6 @@ def share_document(document_id):
     if document is None or document.is_deleted:
         abort(404)
 
-    # Only the document owner can share it
     if document.owner_id != current_user.id:
         abort(403)
 
@@ -399,6 +569,9 @@ def share_document(document_id):
 
     flash("Document access granted successfully.", "success")
     return redirect(url_for("documents.dashboard"))
+
+
+# Revoke document access
 @documents.route(
     "/revoke/<int:document_id>/<int:user_id>",
     methods=["POST"]
@@ -411,7 +584,6 @@ def revoke_document_access(document_id, user_id):
     if document is None or document.is_deleted:
         abort(404)
 
-    # Only the owner can revoke access
     if document.owner_id != current_user.id:
         abort(403)
 
@@ -445,6 +617,8 @@ def revoke_document_access(document_id, user_id):
     flash("Document access revoked successfully.", "success")
 
     return redirect(url_for("documents.dashboard"))
+
+
 # Admin Audit Dashboard
 @documents.route("/admin/audit")
 @login_required
@@ -464,13 +638,16 @@ def admin_audit():
         .outerjoin(Document, AuditLog.document_id == Document.id)
         .order_by(AuditLog.id.desc())
     ).all()
+
     integrity_valid, integrity_message = verify_audit_chain()
+
     return render_template(
-    "admin_audit.html",
-    audit_records=audit_records,
-    integrity_valid=integrity_valid,
-    integrity_message=integrity_message
-)
+        "admin_audit.html",
+        audit_records=audit_records,
+        integrity_valid=integrity_valid,
+        integrity_message=integrity_message
+    )
+
 
 # Admin User Management
 @documents.route("/admin/users")
