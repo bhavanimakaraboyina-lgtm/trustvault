@@ -30,6 +30,7 @@ Users can upload, manage, search, share and access documents based on their assi
 - **CSRF Protection:** Flask-WTF
 - **Rate Limiting:** Flask-Limiter
 - **Testing:** Pytest
+- **Code Editor:** Visual Studio Code
 - **Version Control:** Git and GitHub
 
 ## Project Structure
