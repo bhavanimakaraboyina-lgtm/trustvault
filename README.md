@@ -1,3 +1,10 @@
+# TrustVault
+
+A secure document management platform with role-based access control and audit tracking.
+
+## Live Website
+
+https://trustvault-p0kj.onrender.com
 # TrustVault – Secure Document Management System
 
 ## Project Overview
