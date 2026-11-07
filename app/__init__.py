@@ -33,11 +33,35 @@ def create_app(test_config=None):
 
     app.config["SECRET_KEY"] = secret_key or "development-only-key"
 
-    app.config["SQLALCHEMY_DATABASE_URI"] = (
-        "sqlite:///" + database_path.as_posix()
-    )
+    # Use PostgreSQL when DATABASE_URL is provided.
+    database_url = os.getenv("DATABASE_URL")
+
+    if database_url:
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace(
+                "postgres://",
+                "postgresql+psycopg://",
+                1
+            )
+        elif database_url.startswith("postgresql://"):
+            database_url = database_url.replace(
+                "postgresql://",
+                "postgresql+psycopg://",
+                1
+            )
+
+        app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+    else:
+        # Use SQLite for local development.
+        app.config["SQLALCHEMY_DATABASE_URI"] = (
+            "sqlite:///" + database_path.as_posix()
+        )
 
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_pre_ping": True
+    }
+
     app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 
     app.config["SESSION_COOKIE_HTTPONLY"] = True
