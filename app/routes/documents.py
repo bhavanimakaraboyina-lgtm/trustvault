@@ -31,6 +31,23 @@ def dashboard():
     category = request.args.get("category", "").strip()
     upload_date = request.args.get("upload_date", "").strip()
 
+    # Admins manage users and audit logs, not document content.
+    if current_user.role == "admin":
+        return render_template(
+            "dashboard.html",
+            documents=[],
+            permissions_by_document={},
+            shared_expiry_by_document={},
+            search=search,
+            category=category,
+            upload_date=upload_date,
+            editable_document_ids=set(),
+            downloaded_copy_warnings=[]
+        )
+
+    if current_user.role not in ("owner", "viewer"):
+        abort(403)
+
     shared_access = and_(
         DocumentPermission.user_id == current_user.id,
         DocumentPermission.permission.in_(["read", "edit"]),
@@ -50,7 +67,10 @@ def dashboard():
         .where(
             Document.is_deleted.is_(False),
             or_(
-                Document.owner_id == current_user.id,
+                and_(
+                    Document.owner_id == current_user.id,
+                    current_user.role == "owner"
+                ),
                 shared_access
             )
         )
@@ -92,11 +112,14 @@ def dashboard():
         Document.is_deleted.is_(False)
     )
 
-    permissions = db.session.execute(
-        db.select(DocumentPermission).where(
-            DocumentPermission.document_id.in_(owned_document_ids)
-        )
-    ).scalars().all()
+    permissions = []
+
+    if current_user.role == "owner":
+        permissions = db.session.execute(
+            db.select(DocumentPermission).where(
+                DocumentPermission.document_id.in_(owned_document_ids)
+            )
+        ).scalars().all()
 
     permissions_by_document = {}
 
@@ -105,7 +128,7 @@ def dashboard():
             permission.document_id, []
         ).append(permission)
 
-    # Get expiry information for documents shared with this user.
+    # Expiry information for documents shared with this user.
     shared_expiry_by_document = {}
 
     if documents_list:
@@ -123,7 +146,7 @@ def dashboard():
             for permission in shared_permissions
         }
 
-    # Find documents downloaded by this user before deletion.
+    # Find documents downloaded before deletion.
     DownloadLog = aliased(AuditLog)
     DeleteLog = aliased(AuditLog)
 
@@ -155,7 +178,6 @@ def dashboard():
         .order_by(DeleteLog.created_at.desc())
     ).all()
 
-    # Find warnings already dismissed by this user.
     dismissed_document_ids = set(
         db.session.execute(
             db.select(AuditLog.document_id).where(
@@ -259,14 +281,24 @@ def dismiss_download_warning(document_id):
         db.session.commit()
 
     flash("Warning dismissed successfully.", "success")
-
     return redirect(url_for("documents.dashboard"))
 
 
-# Upload document
+# Upload document - Document Owner only
 @documents.route("/upload", methods=["POST"])
 @login_required
 def upload_document():
+
+    if current_user.role != "owner":
+        record_audit_event(
+            current_user.id,
+            None,
+            "UPLOAD",
+            "DENIED",
+            "Only document owners can upload documents"
+        )
+        db.session.commit()
+        abort(403)
 
     uploaded_file = request.files.get("document")
     category = request.form.get("category", "General").strip()
@@ -381,7 +413,7 @@ def download_document(document_id):
         return redirect(url_for("documents.dashboard"))
 
 
-# Edit document details
+# Edit document details - Owner or explicitly authorized editor
 @documents.route("/edit/<int:document_id>", methods=["POST"])
 @login_required
 def edit_document(document_id):
@@ -432,11 +464,10 @@ def edit_document(document_id):
     db.session.commit()
 
     flash("Document details updated successfully!", "success")
-
     return redirect(url_for("documents.dashboard"))
 
 
-# Delete document (owner only)
+# Delete document - Document Owner of that document only
 @documents.route("/delete/<int:document_id>", methods=["POST"])
 @login_required
 def delete_document_route(document_id):
@@ -446,14 +477,17 @@ def delete_document_route(document_id):
     if document is None or document.is_deleted:
         abort(404)
 
-    if document.owner_id != current_user.id:
+    if (
+        current_user.role != "owner"
+        or document.owner_id != current_user.id
+    ):
 
         record_audit_event(
             current_user.id,
             document.id,
             "DELETE",
             "DENIED",
-            "Only the owner can delete this document"
+            "Only the document owner can delete this document"
         )
         db.session.commit()
 
@@ -486,7 +520,7 @@ def delete_document_route(document_id):
     return redirect(url_for("documents.dashboard"))
 
 
-# Share document
+# Share document - Document Owner of that document only
 @documents.route("/share/<int:document_id>", methods=["POST"])
 @login_required
 def share_document(document_id):
@@ -496,7 +530,18 @@ def share_document(document_id):
     if document is None or document.is_deleted:
         abort(404)
 
-    if document.owner_id != current_user.id:
+    if (
+        current_user.role != "owner"
+        or document.owner_id != current_user.id
+    ):
+        record_audit_event(
+            current_user.id,
+            document.id,
+            "SHARE",
+            "DENIED",
+            "Only the document owner can share this document"
+        )
+        db.session.commit()
         abort(403)
 
     email = request.form.get("email", "").strip().lower()
@@ -517,6 +562,10 @@ def share_document(document_id):
 
     if recipient.id == current_user.id:
         flash("You already own this document.", "error")
+        return redirect(url_for("documents.dashboard"))
+
+    if recipient.role == "admin":
+        flash("Documents cannot be shared with an Admin account.", "error")
         return redirect(url_for("documents.dashboard"))
 
     expiry = None
@@ -571,7 +620,7 @@ def share_document(document_id):
     return redirect(url_for("documents.dashboard"))
 
 
-# Revoke document access
+# Revoke document access - Document Owner only
 @documents.route(
     "/revoke/<int:document_id>/<int:user_id>",
     methods=["POST"]
@@ -584,7 +633,18 @@ def revoke_document_access(document_id, user_id):
     if document is None or document.is_deleted:
         abort(404)
 
-    if document.owner_id != current_user.id:
+    if (
+        current_user.role != "owner"
+        or document.owner_id != current_user.id
+    ):
+        record_audit_event(
+            current_user.id,
+            document.id,
+            "REVOKE",
+            "DENIED",
+            "Only the document owner can revoke access"
+        )
+        db.session.commit()
         abort(403)
 
     permission = db.session.execute(
@@ -599,7 +659,6 @@ def revoke_document_access(document_id, user_id):
         return redirect(url_for("documents.dashboard"))
 
     recipient = db.session.get(User, user_id)
-
     recipient_email = recipient.email if recipient else "Unknown user"
 
     db.session.delete(permission)
@@ -615,7 +674,6 @@ def revoke_document_access(document_id, user_id):
     db.session.commit()
 
     flash("Document access revoked successfully.", "success")
-
     return redirect(url_for("documents.dashboard"))
 
 
@@ -664,6 +722,74 @@ def manage_users():
     return render_template("admin_users.html", users=users)
 
 
+# Admin Change User Role
+@documents.route(
+    "/admin/change-role/<int:user_id>",
+    methods=["POST"]
+)
+@login_required
+def admin_change_role(user_id):
+
+    if current_user.role != "admin":
+        abort(403)
+
+    user = db.session.get(User, user_id)
+
+    if user is None:
+        abort(404)
+
+    if user.id == current_user.id or user.role == "admin":
+        flash("Admin accounts cannot be changed here.", "error")
+        return redirect(url_for("documents.manage_users"))
+
+    new_role = request.form.get("role", "").strip().lower()
+
+    if new_role not in ("owner", "viewer"):
+        flash("Select a valid account role.", "error")
+        return redirect(url_for("documents.manage_users"))
+
+    if user.role == new_role:
+        flash("The user already has this role.", "error")
+        return redirect(url_for("documents.manage_users"))
+
+    # An account that owns active documents cannot become a Viewer.
+    if new_role == "viewer":
+        owned_documents = db.session.execute(
+            db.select(Document.id).where(
+                Document.owner_id == user.id,
+                Document.is_deleted.is_(False)
+            )
+        ).first()
+
+        if owned_documents:
+            flash(
+                "This user still owns active documents. "
+                "Delete or transfer those documents before changing the role.",
+                "error"
+            )
+            return redirect(url_for("documents.manage_users"))
+
+    old_role = user.role
+    user.role = new_role
+
+    record_audit_event(
+        current_user.id,
+        None,
+        "ROLE_CHANGE",
+        "SUCCESS",
+        f"Changed user ID {user.id} from {old_role} to {new_role}"
+    )
+
+    db.session.commit()
+
+    flash(
+        f"User role changed from {old_role} to {new_role}.",
+        "success"
+    )
+
+    return redirect(url_for("documents.manage_users"))
+
+
 # Admin Password Reset
 @documents.route(
     "/admin/reset-password/<int:user_id>",
@@ -691,9 +817,15 @@ def admin_reset_password(user_id):
         or not any(c.isupper() for c in temporary_password)
         or not any(c.islower() for c in temporary_password)
         or not any(c.isdigit() for c in temporary_password)
-        or not any(not c.isalnum() and not c.isspace() for c in temporary_password)
+        or not any(
+            not c.isalnum() and not c.isspace()
+            for c in temporary_password
+        )
     ):
-        flash("Temporary password must meet all password requirements.", "error")
+        flash(
+            "Temporary password must meet all password requirements.",
+            "error"
+        )
         return redirect(url_for("documents.manage_users"))
 
     user.password_hash = generate_password_hash(temporary_password)
@@ -709,6 +841,9 @@ def admin_reset_password(user_id):
 
     db.session.commit()
 
-    flash("Temporary password set. The user must change it at next login.", "success")
+    flash(
+        "Temporary password set. The user must change it at next login.",
+        "success"
+    )
 
     return redirect(url_for("documents.manage_users"))

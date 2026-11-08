@@ -66,8 +66,23 @@
 
     <main class="dashboard-container">
 
-        <h1>Document Dashboard</h1>
-        <p>Manage and protect your documents securely.</p>
+        {% if current_user.role == "admin" %}
+            <h1>Administrator Dashboard</h1>
+            <p>Manage user accounts, roles and security audit activity.</p>
+
+            <section class="dashboard-card">
+                <h2>Administration</h2>
+                <p>Use the options below to manage TrustVault securely.</p>
+                <p><a href="{{ url_for('documents.manage_users') }}">Manage Users</a></p>
+                <p><a href="{{ url_for('documents.admin_audit') }}">View Audit Logs</a></p>
+            </section>
+        {% elif current_user.role == "owner" %}
+            <h1>Document Owner Dashboard</h1>
+            <p>Upload, manage and securely share your documents.</p>
+        {% else %}
+            <h1>Viewer Dashboard</h1>
+            <p>View and download documents shared with you.</p>
+        {% endif %}
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% for category, message in messages %}
@@ -122,209 +137,215 @@
             </section>
         {% endif %}
 
-        <!-- Upload Document -->
-        <section class="dashboard-card">
-            <h2>Upload a Document</h2>
+        <!-- Upload Document: Owners only -->
+        {% if current_user.role == "owner" %}
+            <section class="dashboard-card">
+                <h2>Upload a Document</h2>
 
-            <form method="POST"
-                  action="{{ url_for('documents.upload_document') }}"
-                  enctype="multipart/form-data">
+                <form method="POST"
+                      action="{{ url_for('documents.upload_document') }}"
+                      enctype="multipart/form-data">
 
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-                <label>Select Document</label>
-                <input type="file" name="document"
-                       accept=".pdf,.png,.jpg,.jpeg,.txt" required>
+                    <label>Select Document</label>
+                    <input type="file" name="document"
+                           accept=".pdf,.png,.jpg,.jpeg,.txt" required>
 
-                <label>Document Category</label>
-                <input type="text" name="category"
-                       placeholder="Personal, Education, Work">
+                    <label>Document Category</label>
+                    <input type="text" name="category"
+                           placeholder="Personal, Education, Work">
 
-                <button type="submit">Upload Securely</button>
-            </form>
-        </section>
+                    <button type="submit">Upload Securely</button>
+                </form>
+            </section>
+        {% endif %}
 
-        <!-- My Documents and Shared Documents -->
-        <section class="dashboard-card">
-            <h2>My Documents and Shared Documents</h2>
+        <!-- Documents -->
+        {% if current_user.role != "admin" %}
+            <section class="dashboard-card">
+                {% if current_user.role == "owner" %}
+                    <h2>My Documents and Shared Documents</h2>
+                {% else %}
+                    <h2>Documents Shared With Me</h2>
+                {% endif %}
 
-            <form method="GET"
-                  action="{{ url_for('documents.dashboard') }}"
-                  class="search-form">
+                <form method="GET"
+                      action="{{ url_for('documents.dashboard') }}"
+                      class="search-form">
 
-                <input type="text" name="search"
-                       placeholder="Search document name or owner"
-                       value="{{ search }}">
+                    <input type="text" name="search"
+                           placeholder="Search document name or owner"
+                           value="{{ search }}">
 
-                <input type="text" name="category"
-                       placeholder="Enter category"
-                       value="{{ category }}">
+                    <input type="text" name="category"
+                           placeholder="Enter category"
+                           value="{{ category }}">
 
-                <input type="date" name="upload_date"
-                       value="{{ upload_date }}">
+                    <input type="date" name="upload_date"
+                           value="{{ upload_date }}">
 
-                <button type="submit">Search</button>
-                <a href="{{ url_for('documents.dashboard') }}">Clear</a>
-            </form>
+                    <button type="submit">Search</button>
+                    <a href="{{ url_for('documents.dashboard') }}">Clear</a>
+                </form>
 
-            {% if documents %}
-                <div class="document-list">
+                {% if documents %}
+                    <div class="document-list">
 
-                    {% for document in documents %}
-                        <div class="document-item">
+                        {% for document in documents %}
+                            <div class="document-item">
 
-                            <div>
-                                <h3>{{ document.original_filename }}</h3>
-                                <p>Category: {{ document.category }}</p>
-                                <p>Owner: {{ document.owner.name }}</p>
+                                <div>
+                                    <h3>{{ document.original_filename }}</h3>
+                                    <p>Category: {{ document.category }}</p>
+                                    <p>Owner: {{ document.owner.name }}</p>
 
-                                {% if document.owner_id == current_user.id %}
-                                    <span class="status-label">
-                                        My Document - Owner
-                                    </span>
-                                {% elif document.id in editable_document_ids %}
-                                    <span class="status-label">
-                                        Shared With Me - Edit Access
-                                    </span>
-                                {% else %}
-                                    <span class="status-label">
-                                        Shared With Me - Read Access
-                                    </span>
-                                {% endif %}
+                                    {% if document.owner_id == current_user.id %}
+                                        <span class="status-label">
+                                            My Document - Owner
+                                        </span>
+                                    {% elif document.id in editable_document_ids %}
+                                        <span class="status-label">
+                                            Shared With Me - Edit Access
+                                        </span>
+                                    {% else %}
+                                        <span class="status-label">
+                                            Shared With Me - Read Access
+                                        </span>
+                                    {% endif %}
 
-                                <!-- Access Expiry for Shared Documents -->
-                                {% if document.owner_id != current_user.id %}
-                                    {% set access_expiry = shared_expiry_by_document.get(document.id) %}
+                                    {% if document.owner_id != current_user.id %}
+                                        {% set access_expiry = shared_expiry_by_document.get(document.id) %}
 
-                                    <div class="access-expiry">
-                                        <hr>
+                                        <div class="access-expiry">
+                                            <hr>
+                                            <p>
+                                                <strong>Access expires:</strong>
+
+                                                {% if access_expiry %}
+                                                    {{ access_expiry.strftime("%d-%m-%Y %I:%M %p") }}
+                                                {% else %}
+                                                    No expiry
+                                                {% endif %}
+                                            </p>
+
+                                            <small>
+                                                This information appears only for shared documents.
+                                            </small>
+                                        </div>
+                                    {% endif %}
+                                </div>
+
+                                <div>
+                                    <!-- Download -->
+                                    <a href="{{ url_for('documents.download_document', document_id=document.id) }}">
+                                        Download
+                                    </a>
+
+                                    <!-- Edit: Owners and users with Edit permission -->
+                                    {% if document.id in editable_document_ids %}
+                                        <h4>Edit Document Details</h4>
+
+                                        <form method="POST"
+                                              action="{{ url_for('documents.edit_document', document_id=document.id) }}">
+
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                                            <label>Document Name</label>
+                                            <input type="text" name="filename"
+                                                   value="{{ document.original_filename }}" required>
+
+                                            <label>Category</label>
+                                            <input type="text" name="category"
+                                                   value="{{ document.category }}" required>
+
+                                            <button type="submit">Update Document</button>
+                                        </form>
+                                    {% endif %}
+
+                                    {% if current_user.role == "owner" and document.owner_id == current_user.id %}
+                                        <!-- Delete -->
+                                        <form method="POST"
+                                              action="{{ url_for('documents.delete_document_route', document_id=document.id) }}"
+                                              onsubmit="return confirm('Are you sure you want to delete this document?');">
+
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                                            <button type="submit" class="delete-btn">
+                                                Delete
+                                            </button>
+                                        </form>
+
+                                        <!-- Share Document -->
+                                        <h4>Share Document</h4>
+
+                                        <form method="POST"
+                                              action="{{ url_for('documents.share_document', document_id=document.id) }}">
+
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                                            <label>Recipient Email</label>
+                                            <input type="email" name="email"
+                                                   placeholder="Registered user's email" required>
+
+                                            <label>Choose Permission</label>
+                                            <select name="permission" required>
+                                                <option value="read">Read - View and Download</option>
+                                                <option value="edit">Edit - View, Download and Edit</option>
+                                            </select>
+
+                                            <label>Access Expiry (Optional)</label>
+                                            <input type="date" name="expiry">
+
+                                            <button type="submit">Share Securely</button>
+                                        </form>
 
                                         <p>
-                                            <strong>Access expires:</strong>
-
-                                            {% if access_expiry %}
-                                                {{ access_expiry.strftime("%d-%m-%Y %I:%M %p") }}
-                                            {% else %}
-                                                No expiry
-                                            {% endif %}
+                                            To change an existing user's permission,
+                                            share again using the same email and select
+                                            the new permission.
                                         </p>
 
-                                        <small>
-                                            This information appears only for shared documents.
-                                        </small>
-                                    </div>
-                                {% endif %}
-                            </div>
+                                        <!-- People With Access -->
+                                        <h4>People with Access</h4>
 
-                            <div>
-                                <!-- Download -->
-                                <a href="{{ url_for('documents.download_document', document_id=document.id) }}">
-                                    Download
-                                </a>
+                                        {% for permission in permissions_by_document.get(document.id, []) %}
+                                            <div class="document-item">
+                                                <div>
+                                                    <p>Email: {{ permission.user.email }}</p>
+                                                    <p>Permission: {{ permission.permission|upper }}</p>
 
-                                <!-- Edit Document -->
-                                {% if document.id in editable_document_ids %}
-                                    <h4>Edit Document Details</h4>
+                                                    <p>
+                                                        Expiry:
+                                                        {% if permission.expires_at %}
+                                                            {{ permission.expires_at.strftime("%d-%m-%Y %I:%M %p") }}
+                                                        {% else %}
+                                                            No expiry
+                                                        {% endif %}
+                                                    </p>
+                                                </div>
 
-                                    <form method="POST"
-                                          action="{{ url_for('documents.edit_document', document_id=document.id) }}">
+                                                <form method="POST"
+                                                      action="{{ url_for('documents.revoke_document_access', document_id=document.id, user_id=permission.user_id) }}">
 
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-                                        <label>Document Name</label>
-                                        <input type="text" name="filename"
-                                               value="{{ document.original_filename }}" required>
-
-                                        <label>Category</label>
-                                        <input type="text" name="category"
-                                               value="{{ document.category }}" required>
-
-                                        <button type="submit">Update Document</button>
-                                    </form>
-                                {% endif %}
-
-                                {% if document.owner_id == current_user.id %}
-                                    <!-- Delete -->
-                                    <form method="POST"
-                                          action="{{ url_for('documents.delete_document_route', document_id=document.id) }}"
-                                          onsubmit="return confirm('Are you sure you want to delete this document?');">
-
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-                                        <button type="submit" class="delete-btn">
-                                            Delete
-                                        </button>
-                                    </form>
-
-                                    <!-- Share Document -->
-                                    <h4>Share Document</h4>
-
-                                    <form method="POST"
-                                          action="{{ url_for('documents.share_document', document_id=document.id) }}">
-
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-                                        <label>Recipient Email</label>
-                                        <input type="email" name="email"
-                                               placeholder="Registered user's email" required>
-
-                                        <label>Choose Permission</label>
-                                        <select name="permission" required>
-                                            <option value="read">Read - View and Download</option>
-                                            <option value="edit">Edit - View, Download and Edit</option>
-                                        </select>
-
-                                        <label>Access Expiry (Optional)</label>
-                                        <input type="date" name="expiry">
-
-                                        <button type="submit">Share Securely</button>
-                                    </form>
-
-                                    <p>
-                                        To change an existing user's permission,
-                                        share again using the same email and select
-                                        the new permission.
-                                    </p>
-
-                                    <!-- People With Access -->
-                                    <h4>People with Access</h4>
-
-                                    {% for permission in permissions_by_document.get(document.id, []) %}
-                                        <div class="document-item">
-                                            <div>
-                                                <p>Email: {{ permission.user.email }}</p>
-                                                <p>Permission: {{ permission.permission|upper }}</p>
-
-                                                <p>
-                                                    Expiry:
-                                                    {% if permission.expires_at %}
-                                                        {{ permission.expires_at.strftime("%d-%m-%Y %I:%M %p") }}
-                                                    {% else %}
-                                                        No expiry
-                                                    {% endif %}
-                                                </p>
+                                                    <button type="submit">Revoke Access</button>
+                                                </form>
                                             </div>
-
-                                            <form method="POST"
-                                                  action="{{ url_for('documents.revoke_document_access', document_id=document.id, user_id=permission.user_id) }}">
-
-                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-                                                <button type="submit">Revoke Access</button>
-                                            </form>
-                                        </div>
-                                    {% else %}
-                                        <p>No users have access yet.</p>
-                                    {% endfor %}
-                                {% endif %}
+                                        {% else %}
+                                            <p>No users have access yet.</p>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
                             </div>
-                        </div>
-                    {% endfor %}
-                </div>
-            {% else %}
-                <p class="empty-message">No documents available yet.</p>
-            {% endif %}
-        </section>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="empty-message">No documents available yet.</p>
+                {% endif %}
+            </section>
+        {% endif %}
     </main>
 
     <script>

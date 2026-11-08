@@ -1,14 +1,15 @@
+
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
+from app import create_app
+from app.extensions import db
 from app.models import User, Document, DocumentPermission
 from app.services.permissions import (
     can_read_document,
     can_edit_document
 )
-import pytest
-
-from app import create_app
-from app.extensions import db
 
 
 @pytest.fixture
@@ -28,15 +29,13 @@ def app():
         db.drop_all()
 
 
-@pytest.fixture
-def client(app):
-    return app.test_client()
 def test_owner_can_read_and_edit(app):
     with app.app_context():
         owner = User(
             name="Owner",
             email="owner@test.com",
-            password_hash="test"
+            password_hash="test",
+            role="owner"
         )
         db.session.add(owner)
         db.session.flush()
@@ -53,17 +52,19 @@ def test_owner_can_read_and_edit(app):
         assert can_edit_document(owner, document)
 
 
-def test_unauthorized_user_cannot_access(app):
+def test_unauthorized_viewer_cannot_access(app):
     with app.app_context():
         owner = User(
             name="Owner",
             email="owner@test.com",
-            password_hash="test"
+            password_hash="test",
+            role="owner"
         )
         viewer = User(
             name="Viewer",
             email="viewer@test.com",
-            password_hash="test"
+            password_hash="test",
+            role="viewer"
         )
         db.session.add_all([owner, viewer])
         db.session.flush()
@@ -80,17 +81,19 @@ def test_unauthorized_user_cannot_access(app):
         assert not can_edit_document(viewer, document)
 
 
-def test_read_only_user_cannot_edit(app):
+def test_read_only_viewer_cannot_edit(app):
     with app.app_context():
         owner = User(
             name="Owner",
             email="owner@test.com",
-            password_hash="test"
+            password_hash="test",
+            role="owner"
         )
         viewer = User(
             name="Viewer",
             email="viewer@test.com",
-            password_hash="test"
+            password_hash="test",
+            role="viewer"
         )
         db.session.add_all([owner, viewer])
         db.session.flush()
@@ -115,19 +118,21 @@ def test_read_only_user_cannot_edit(app):
         assert not can_edit_document(viewer, document)
 
 
-def test_editor_can_edit(app):
+def test_viewer_can_edit_when_owner_grants_edit(app):
     with app.app_context():
         owner = User(
             name="Owner",
             email="owner@test.com",
-            password_hash="test"
+            password_hash="test",
+            role="owner"
         )
-        editor = User(
-            name="Editor",
-            email="editor@test.com",
-            password_hash="test"
+        viewer = User(
+            name="Viewer",
+            email="viewer@test.com",
+            password_hash="test",
+            role="viewer"
         )
-        db.session.add_all([owner, editor])
+        db.session.add_all([owner, viewer])
         db.session.flush()
 
         document = Document(
@@ -140,14 +145,51 @@ def test_editor_can_edit(app):
 
         permission = DocumentPermission(
             document_id=document.id,
-            user_id=editor.id,
+            user_id=viewer.id,
             permission="edit"
         )
         db.session.add(permission)
         db.session.commit()
 
-        assert can_read_document(editor, document)
-        assert can_edit_document(editor, document)
+        assert can_read_document(viewer, document)
+        assert can_edit_document(viewer, document)
+
+
+def test_admin_cannot_access_document_by_default(app):
+    with app.app_context():
+        admin = User(
+            name="Admin",
+            email="admin@test.com",
+            password_hash="test",
+            role="admin"
+        )
+        owner = User(
+            name="Owner",
+            email="owner@test.com",
+            password_hash="test",
+            role="owner"
+        )
+        db.session.add_all([admin, owner])
+        db.session.flush()
+
+        document = Document(
+            original_filename="test.txt",
+            stored_filename="test-file.txt",
+            owner_id=owner.id
+        )
+        db.session.add(document)
+        db.session.flush()
+
+        permission = DocumentPermission(
+            document_id=document.id,
+            user_id=admin.id,
+            permission="edit"
+        )
+        db.session.add(permission)
+        db.session.commit()
+
+        assert not can_read_document(admin, document)
+        assert not can_edit_document(admin, document)
 
 
 def test_expired_permission_is_rejected(app):
@@ -155,12 +197,14 @@ def test_expired_permission_is_rejected(app):
         owner = User(
             name="Owner",
             email="owner@test.com",
-            password_hash="test"
+            password_hash="test",
+            role="owner"
         )
         viewer = User(
             name="Viewer",
             email="viewer@test.com",
-            password_hash="test"
+            password_hash="test",
+            role="viewer"
         )
         db.session.add_all([owner, viewer])
         db.session.flush()

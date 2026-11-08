@@ -1,6 +1,6 @@
 
-
 import pytest
+
 from app import create_app
 from app.extensions import db
 from app.models import User
@@ -46,7 +46,7 @@ def test_registration_success(client, app):
         ).scalar_one_or_none()
 
         assert user is not None
-        assert user.role == "owner"
+        assert user.role == "viewer"
         assert check_password_hash(user.password_hash, "Password@123")
 
 
@@ -103,7 +103,8 @@ def test_login_success(client, app):
 
     response = client.post("/login", data={
         "email": "login@gmail.com",
-        "password": "Password@123"
+        "password": "Password@123",
+        "login_role": "owner"
     })
 
     assert response.status_code == 302
@@ -123,7 +124,40 @@ def test_login_wrong_password(client, app):
 
     response = client.post("/login", data={
         "email": "login@gmail.com",
-        "password": "Wrong@123"
+        "password": "Wrong@123",
+        "login_role": "owner"
     })
 
-    assert response.status_code == 200
+    assert response.status_code == 302
+    assert response.location.endswith("/login")
+
+
+def test_login_wrong_role_rejected(client, app):
+    with app.app_context():
+        user = User(
+            name="Test User",
+            email="viewer@gmail.com",
+            password_hash=generate_password_hash("Password@123"),
+            role="viewer"
+        )
+        db.session.add(user)
+        db.session.commit()
+
+    response = client.post("/login", data={
+        "email": "viewer@gmail.com",
+        "password": "Password@123",
+        "login_role": "admin"
+    })
+
+    assert response.status_code == 302
+    assert response.location.endswith("/login")
+
+
+def test_login_without_role_rejected(client, app):
+    response = client.post("/login", data={
+        "email": "login@gmail.com",
+        "password": "Password@123"
+    })
+
+    assert response.status_code == 302
+    assert response.location.endswith("/login")

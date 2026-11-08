@@ -1,3 +1,4 @@
+
 from datetime import datetime, timezone
 
 from app.extensions import db
@@ -8,12 +9,23 @@ def has_document_permission(user, document, required_permission="read"):
     if not user or not user.is_authenticated:
         return False
 
+    if not document or document.is_deleted:
+        return False
+
     if required_permission not in ("read", "edit"):
         return False
 
-    # Document owners can access their own documents.
+    # Admin accounts do not automatically access confidential documents.
+    if user.role == "admin":
+        return False
+
+    # Only document owners can automatically manage their own documents.
     if document.owner_id == user.id:
-        return True
+        return user.role == "owner"
+
+    # Only registered Owner and Viewer accounts can receive shared access.
+    if user.role not in ("owner", "viewer"):
+        return False
 
     permission = db.session.execute(
         db.select(DocumentPermission).filter_by(
@@ -25,6 +37,7 @@ def has_document_permission(user, document, required_permission="read"):
     if permission is None:
         return False
 
+    # Reject expired permissions.
     if permission.expires_at:
         expiry = permission.expires_at
 

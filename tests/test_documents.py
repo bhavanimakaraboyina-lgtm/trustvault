@@ -1,5 +1,6 @@
 
 import pytest
+
 from app import create_app
 from app.extensions import db
 from app.models import User, Document
@@ -21,12 +22,15 @@ def app():
         owner = User(
             name="Owner",
             email="owner@test.com",
-            password_hash="test"
+            password_hash="test",
+            role="owner"
         )
+
         stranger = User(
             name="Stranger",
             email="stranger@test.com",
-            password_hash="test"
+            password_hash="test",
+            role="viewer"
         )
 
         db.session.add_all([owner, stranger])
@@ -52,7 +56,6 @@ def client(app):
     return app.test_client()
 
 
-
 def login(client, email):
     with client.application.app_context():
         user = db.session.execute(
@@ -64,6 +67,7 @@ def login(client, email):
     with client.session_transaction() as session:
         session["_user_id"] = user_id
         session["_fresh"] = True
+
 
 def test_stranger_cannot_download_document(client):
     login(client, "stranger@test.com")
@@ -82,6 +86,8 @@ def test_stranger_cannot_edit_document(client):
     })
 
     assert response.status_code == 404
+
+
 def test_stranger_cannot_delete_document(client):
     login(client, "stranger@test.com")
 

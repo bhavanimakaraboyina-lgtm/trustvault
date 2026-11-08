@@ -1,49 +1,153 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TrustVault | Register</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            font-family: Arial, sans-serif;
+            color: #e5f5ed;
+            background: #061b16;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 430px;
+            padding: 34px;
+            border: 1px solid #1d5945;
+            border-radius: 18px;
+            background: #0b2920;
+            box-shadow: 0 15px 45px rgba(0,0,0,.3);
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            text-align: center;
+            color: #62d6a1;
+        }
+
+        .subtitle {
+            margin: 0 0 25px;
+            text-align: center;
+            color: #a9c8b9;
+            font-size: 14px;
+        }
+
+        label {
+            display: block;
+            margin: 16px 0 7px;
+            color: #c6dfd2;
+            font-size: 14px;
+        }
+
+        input {
+            width: 100%;
+            padding: 13px;
+            border: 1px solid #35634f;
+            border-radius: 8px;
+            outline: none;
+            color: white;
+            background: #071f18;
+        }
+
+        input:focus { border-color: #62d6a1; }
+
+        .notice {
+            margin-top: 18px;
+            padding: 12px;
+            border-radius: 8px;
+            background: #10372a;
+            color: #bcebd2;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        button {
+            width: 100%;
+            margin-top: 22px;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            color: #062116;
+            background: #62d6a1;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        button:hover { background: #82e5b8; }
+
+        .links {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        a {
+            color: #75dfad;
+            text-decoration: none;
+        }
+
+        .message {
+            padding: 10px;
+            margin-bottom: 12px;
+            border-radius: 7px;
+            background: #174634;
+            color: #d8f5e5;
+            font-size: 14px;
+        }
+
+        .error { background: #552b2b; color: #ffdada; }
+    </style>
 </head>
 <body>
+    <main class="container">
+        <h1>TrustVault</h1>
+        <p class="subtitle">Create your secure account</p>
 
-    <div class="auth-container">
-        <div class="auth-card">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="message {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
 
-            <h1>TrustVault</h1>
-            <p>Create your secure account</p>
+        <form method="POST" action="{{ url_for('auth.register') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% for category, message in messages %}
-                    <div class="message {{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endwith %}
+            <label for="name">Full Name</label>
+            <input type="text" id="name" name="name"
+                   placeholder="Enter your name" required>
 
-            <form method="POST">
+            <label for="email">Gmail Address</label>
+            <input type="email" id="email" name="email"
+                   placeholder="Enter your Gmail address" required>
 
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password"
+                   placeholder="Create a strong password" required>
 
-                <label>Full Name</label>
-                <input type="text" name="name" placeholder="Enter your name" required>
+            <div class="notice">
+                New accounts start with Viewer access.
+                An Administrator can assign Document Owner access later.
+            </div>
 
-                <label>Email Address</label>
-                <input type="email" name="email" placeholder="Enter your email" required>
+            <button type="submit">Create Account</button>
+        </form>
 
-                <label>Password</label>
-                <input type="password" name="password" placeholder="Minimum 8 characters" minlength="8" required>
-
-                <button type="submit">Create Account</button>
-
-            </form>
-
-            <p class="auth-link">
-                Already registered?
-                <a href="{{ url_for('auth.login') }}">Login</a>
-            </p>
-
+        <div class="links">
+            Already have an account?
+            <a href="{{ url_for('auth.login') }}">Sign In</a>
         </div>
-    </div>
-
+    </main>
 </body>
 </html>
