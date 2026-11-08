@@ -731,6 +731,14 @@ def manage_users():
 def admin_change_role(user_id):
 
     if current_user.role != "admin":
+        record_audit_event(
+            current_user.id,
+            None,
+            "ROLE_CHANGE",
+            "DENIED",
+            "Only Admin can change account roles"
+        )
+        db.session.commit()
         abort(403)
 
     user = db.session.get(User, user_id)
@@ -739,16 +747,40 @@ def admin_change_role(user_id):
         abort(404)
 
     if user.id == current_user.id or user.role == "admin":
+        record_audit_event(
+            current_user.id,
+            None,
+            "ROLE_CHANGE",
+            "DENIED",
+            f"Attempt to change protected Admin account ID {user.id}"
+        )
+        db.session.commit()
         flash("Admin accounts cannot be changed here.", "error")
         return redirect(url_for("documents.manage_users"))
 
     new_role = request.form.get("role", "").strip().lower()
 
     if new_role not in ("owner", "viewer"):
+        record_audit_event(
+            current_user.id,
+            None,
+            "ROLE_CHANGE",
+            "DENIED",
+            f"Invalid role selected for user ID {user.id}"
+        )
+        db.session.commit()
         flash("Select a valid account role.", "error")
         return redirect(url_for("documents.manage_users"))
 
     if user.role == new_role:
+        record_audit_event(
+            current_user.id,
+            None,
+            "ROLE_CHANGE",
+            "DENIED",
+            f"Role change not performed: user ID {user.id} already has role {new_role}"
+        )
+        db.session.commit()
         flash("The user already has this role.", "error")
         return redirect(url_for("documents.manage_users"))
 
@@ -762,6 +794,18 @@ def admin_change_role(user_id):
         ).first()
 
         if owned_documents:
+            record_audit_event(
+                current_user.id,
+                None,
+                "ROLE_CHANGE",
+                "DENIED",
+                (
+                    f"Cannot change user ID {user.id} from owner to viewer: "
+                    "user still owns active documents"
+                )
+            )
+            db.session.commit()
+
             flash(
                 "This user still owns active documents. "
                 "Delete or transfer those documents before changing the role.",
