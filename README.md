@@ -1,37 +1,40 @@
-# TrustVault
+# TrustVault – Secure Document Management System
 
-A secure document management platform with role-based access control and audit tracking.
+A secure document management platform with role-based access control, document-level permissions and audit tracking.
 
 ## Live Website
 
 https://trustvault-p0kj.onrender.com
-# TrustVault – Secure Document Management System
 
 ## Project Overview
 
-TrustVault is a secure document management platform designed to protect confidential documents. It provides user authentication, document-level access permissions, permission expiry and audit logging.
+TrustVault is a secure document management platform designed to protect confidential documents and prevent unauthorized access.
 
-Users can upload, manage, search, share and access documents based on their assigned permissions.
+It provides user authentication, role-based access control, document-level permissions, permission expiry, access revocation and audit logging.
+
+Users can upload, manage, search, share and access documents according to their assigned roles and permissions.
 
 ## Key Features
 
 - User registration and secure login.
-- Administrator, document owner and authorized viewer/editor access.
+- Three roles: Administrator, Document Owner and Viewer.
 - Secure document upload and private storage.
 - Document sharing with Read and Edit permissions.
-- Permission expiry and immediate revocation.
+- Permission expiry and immediate access revocation.
 - Document search by filename, owner, category and date.
+- Server-side authorization checks.
 - Access-denial tracking.
-- Audit logs with SHA-256 hash-chain verification.
+- SHA-256 hash-linked audit records.
 - Administrator audit dashboard.
-- Password reset by administrator with forced password change.
+- Administrator password reset with forced password change.
 - File validation and 10 MB upload limit.
+- LeakTrace document watermarking.
 
 ## Technologies Used
 
 - **Backend:** Python, Flask
 - **Frontend:** HTML, CSS, JavaScript
-- **Database:** SQLite
+- **Database:** SQLite (local development), PostgreSQL (production)
 - **ORM:** Flask-SQLAlchemy
 - **Authentication:** Flask-Login
 - **CSRF Protection:** Flask-WTF
@@ -39,6 +42,7 @@ Users can upload, manage, search, share and access documents based on their assi
 - **Testing:** Pytest
 - **Code Editor:** Visual Studio Code
 - **Version Control:** Git and GitHub
+- **Deployment:** Render
 
 ## Project Structure
 
@@ -106,6 +110,10 @@ Create a local `.env` file using `.env.example` as a template.
 
 Set a strong, unique `SECRET_KEY` before running the application.
 
+For production, configure `DATABASE_URL` with your PostgreSQL connection string.
+
+Never commit the `.env` file or expose database credentials.
+
 ### 7. Run the application
 
 ```bash
@@ -122,40 +130,40 @@ Run the automated test suite using:
 python -m pytest -v -p no:cacheprovider
 ```
 
-The current automated test suite contains **23 passing tests**.
+The latest automated test run passed **26 tests**.
 
 ## Security Measures
 
 - Password hashing.
-- Server-side document permission checks.
+- Server-side role and document permission checks.
 - Private document storage outside the public static directory.
 - File extension and signature validation.
 - UUID-based internal filenames.
 - CSRF protection.
-- Secure session cookie settings.
-- Permission expiry and revocation.
+- Secure session cookie settings in production.
+- Permission expiry and immediate revocation.
 - SHA-256 hash-linked audit records.
+- Logging of successful and denied security-sensitive actions.
 
 For additional security information, see [THREATS.md](THREATS.md).
 
 ## Current Limitations and Future Improvements
 
 - Add malware scanning for uploaded documents.
-- Implement a secure administrator bootstrap process.
-- Improve authentication rate limiting.
-- Use PostgreSQL for production.
-- Configure HTTPS and production secrets.
-- Use persistent private storage.
-- Add external immutable audit-log backups.
-- Perform additional security testing.
+- Use persistent object storage for production documents.
+- Configure external immutable audit-log backups.
+- Perform independent security testing.
+- Improve monitoring and security alerts.
+
+**Storage note:** The current Render free deployment uses temporary filesystem storage. Uploaded files may not survive service restarts or redeployments. The production database is hosted separately on PostgreSQL.
 
 ## AI Development Documentation
 
-The AI-assisted development process, prompts, outcomes and changes are documented in [PROMPTS.md](PROMPTS.md).
+The AI-assisted development process, prompts, outcomes and implementation changes are documented in [PROMPTS.md](PROMPTS.md).
 
 ## Project Status
 
-The application has been implemented and tested locally. Production deployment and additional security hardening are still required.
+TrustVault is deployed and available online. The application has passed 26 automated tests, and key authentication, document permission, access revocation and audit logging scenarios have been tested.
 
 ## Author
 

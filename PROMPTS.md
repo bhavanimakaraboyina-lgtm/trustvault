@@ -1,91 +1,138 @@
 # TrustVault – AI Prompt Log
 
-This file records the AI assistance used during the development of TrustVault. The entries summarize the prompts, AI guidance, problems encountered, and actions taken.
+This file records the AI assistance used during the development of TrustVault. The entries summarize the prompts, AI guidance, problems encountered, actions taken, and related GitHub commits.
 
 ## Entry 1 – 4 November 2026: Project Architecture
 
-**Prompt:**  
+**Prompt:**
+
 Help me build TrustVault, a secure document management platform with administrator, document owner, and viewer permissions.
 
-**AI Output:**  
+**AI Output:**
+
 Suggested a Flask-based application with authentication, document management, role-based access control, database models, and audit logging.
 
-**Problem Encountered:**  
+**Problem Encountered:**
+
 The initial project structure was confusing, especially creating Python files and folders correctly in VS Code.
 
-**Changed Action:**  
+**Changed Action:**
+
 Created the application structure using Flask, SQLAlchemy, and separate routes and services.
 
-**Related Commit:**  
+**Related Commit:**
+
 [Initial TrustVault project setup](https://github.com/bhavanimakaraboyina-lgtm/trustvault/commit/03726f5)
 
 ## Entry 2 – 4 November 2026: Authorization and Access Control
 
-**Prompt:**  
+**Prompt:**
+
 How can I ensure that users can access only documents shared with them and cannot access other users' confidential files?
 
-**AI Output:**  
+**AI Output:**
+
 Recommended server-side document permission checks for every protected request, with separate Read and Edit permissions.
 
-**Problem Encountered:**  
+**Problem Encountered:**
+
 A user without permission must not be able to access a document by directly entering its URL.
 
-**Changed Action:**  
+**Changed Action:**
+
 Implemented permission checks for document reading, downloading, and editing. Added permission expiry and access revocation.
 
-**Related Commit:**  
+**Related Commit:**
+
 [Document access expiry and security improvements](https://github.com/bhavanimakaraboyina-lgtm/trustvault/commit/47e1d5c)
 
 ## Entry 3 – 5 November 2026: Audit Trail and Security
 
-**Prompt:**  
+**Prompt:**
+
 How can TrustVault record who accessed a document and when, including unsuccessful access attempts?
 
-**AI Output:**  
+**AI Output:**
+
 Suggested audit records containing the actor, document, action, outcome, timestamp, and hash-chain information.
 
-**Problem Encountered:**  
+**Problem Encountered:**
+
 Audit records should also capture denied access attempts, not only successful activities.
 
-**Changed Action:**  
+**Changed Action:**
+
 Implemented audit logging for document activities and hash-chain verification. Added tests for valid and tampered audit records.
 
-**Related Commit:**  
+**Related Commit:**
+
 [Initial TrustVault project setup with security tests](https://github.com/bhavanimakaraboyina-lgtm/trustvault/commit/03726f5)
 
 ## Entry 4 – 5 November 2026: Secure File Storage
 
-**Prompt:**  
+**Prompt:**
+
 How can I securely upload and store confidential documents without exposing their original filenames or allowing unsafe file uploads?
 
-**AI Output:**  
+**AI Output:**
+
 Recommended file extension and content-signature validation, random UUID-based stored filenames, and private server-side storage.
 
-**Problem Encountered:**  
+**Problem Encountered:**
+
 Files with unsupported extensions or invalid file content must be rejected.
 
-**Changed Action:**  
+**Changed Action:**
+
 Implemented file validation, generated random storage filenames, and added storage tests for invalid files and filenames.
 
-**Related Commit:**  
+**Related Commit:**
+
 [Initial TrustVault project setup](https://github.com/bhavanimakaraboyina-lgtm/trustvault/commit/03726f5)
 
 ## Entry 5 – 8 November 2026: Testing and Authorization Verification
 
-**Prompt:**  
+**Prompt:**
+
 Help me test authentication, document permissions, file storage, and audit logging to identify security problems.
 
-**AI Output:**  
+**AI Output:**
+
 Suggested automated tests for registration, login, unauthorized access, expired permissions, file validation, document deletion, and audit-chain integrity.
 
-**Problem Encountered:**  
+**Problem Encountered:**
+
 Unauthorized users must not be able to download, edit, or delete another user's documents.
 
-**Changed Action:**  
-Executed the automated test suite and verified the security features. All 23 tests passed.
+**Changed Action:**
 
-**Related Commit:**  
+Executed the automated test suite and verified the security features. The latest completed test run passed 26 tests.
+
+**Related Commit:**
+
 [TrustVault project development history](https://github.com/bhavanimakaraboyina-lgtm/trustvault/commits/main)
+
+## Entry 6 – 9 November 2026: Denied Role-Change Audit Logging
+
+**Prompt:**
+
+How can I record unsuccessful administrator role-change attempts in the audit log while preventing an Owner with active documents from being downgraded to Viewer?
+
+**AI Output:**
+
+Recommended recording denied role-change attempts with the actor, target user, action, outcome, and reason, while preserving the existing role-change restrictions.
+
+**Problem Encountered:**
+
+The application correctly blocked the downgrade of an Owner who still owned active documents, but the denied attempt was not recorded in the audit log.
+
+**Changed Action:**
+
+Updated the administrator role-change route to record denied attempts, including attempts involving protected accounts, invalid roles, and Owners with active documents. Ran the automated test suite; all 26 tests passed.
+
+**Related Commit:**
+
+[Log denied admin role change attempts](https://github.com/bhavanimakaraboyina-lgtm/trustvault/commit/695a10e)
 
 ---
 
