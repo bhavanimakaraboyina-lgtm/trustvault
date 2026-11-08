@@ -5,8 +5,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TrustVault | Manage Users</title>
+
     <style>
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
 
         body {
             margin: 0;
@@ -17,19 +20,27 @@
         }
 
         .container {
-            max-width: 1100px;
+            max-width: 1200px;
             margin: auto;
         }
 
-        h1 { color: #62d6a1; }
+        h1 {
+            color: #62d6a1;
+        }
 
-        .subtitle { color: #a9c8b9; }
+        .subtitle {
+            color: #a9c8b9;
+        }
 
         .top-link {
             display: inline-block;
             margin: 10px 0 22px;
             color: #75dfad;
             text-decoration: none;
+        }
+
+        .top-link:hover {
+            text-decoration: underline;
         }
 
         .table-wrapper {
@@ -42,7 +53,7 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            min-width: 750px;
+            min-width: 950px;
         }
 
         th, td {
@@ -57,16 +68,28 @@
             background: #10372a;
         }
 
-        select {
-            padding: 9px;
+        tr:hover {
+            background: #10372a;
+        }
+
+        select,
+        input[type="password"] {
+            width: 100%;
+            min-width: 150px;
+            padding: 10px;
+            margin-bottom: 8px;
             border: 1px solid #35634f;
             border-radius: 6px;
             color: white;
             background: #071f18;
         }
 
+        input::placeholder {
+            color: #a9c8b9;
+        }
+
         button {
-            padding: 9px 12px;
+            padding: 10px 13px;
             border: none;
             border-radius: 6px;
             color: #062116;
@@ -75,18 +98,30 @@
             cursor: pointer;
         }
 
-        button:hover { background: #82e5b8; }
+        button:hover {
+            background: #82e5b8;
+        }
 
-        .reset-button { background: #e5c46c; }
+        .reset-button {
+            background: #e5c46c;
+        }
+
+        .reset-button:hover {
+            background: #f2d78e;
+        }
 
         .message {
-            padding: 11px;
+            padding: 12px;
             margin-bottom: 12px;
             border-radius: 7px;
             background: #174634;
+            color: #d9ffeb;
         }
 
-        .error { background: #552b2b; color: #ffdada; }
+        .error {
+            background: #552b2b;
+            color: #ffdada;
+        }
 
         .protected {
             color: #e5c46c;
@@ -97,20 +132,50 @@
             padding: 20px;
             color: #a9c8b9;
         }
+
+        .form-cell {
+            min-width: 200px;
+        }
+
+        .reset-cell {
+            min-width: 230px;
+        }
+
+        .hint {
+            display: block;
+            margin: 0 0 8px;
+            color: #a9c8b9;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 15px;
+            }
+        }
     </style>
 </head>
+
 <body>
     <main class="container">
+
         <h1>Manage Users</h1>
-        <p class="subtitle">Manage account roles and password resets.</p>
+
+        <p class="subtitle">
+            Manage account roles and password resets.
+        </p>
 
         <a class="top-link" href="{{ url_for('documents.dashboard') }}">
-            ← Back to Dashboard
+            &#8592; Back to Dashboard
         </a>
 
+        <!-- Flash messages -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% for category, message in messages %}
-                <div class="message {{ category }}">{{ message }}</div>
+                <div class="message {{ 'error' if category == 'error' else '' }}">
+                    {{ message }}
+                </div>
             {% endfor %}
         {% endwith %}
 
@@ -131,17 +196,23 @@
                     {% for user in users %}
                     <tr>
                         <td>{{ user.id }}</td>
+
                         <td>{{ user.name }}</td>
+
                         <td>{{ user.email }}</td>
+
                         <td>{{ user.role|capitalize }}</td>
 
-                        <td>
-                            {% if user.role == "admin" or user.id == current_user.id %}
-                                <span class="protected">Protected</span>
-                            {% else %}
+                        <!-- Role management -->
+                        <td class="form-cell">
+
+                            {% if user.role != "admin" and user.id != current_user.id %}
+
                                 <form method="POST"
                                       action="{{ url_for('documents.admin_change_role', user_id=user.id) }}">
-                                    <input type="hidden" name="csrf_token"
+
+                                    <input type="hidden"
+                                           name="csrf_token"
                                            value="{{ csrf_token() }}">
 
                                     <select name="role" required>
@@ -149,40 +220,86 @@
                                             {% if user.role == "viewer" %}selected{% endif %}>
                                             Viewer
                                         </option>
+
                                         <option value="owner"
                                             {% if user.role == "owner" %}selected{% endif %}>
                                             Document Owner
                                         </option>
                                     </select>
 
-                                    <button type="submit">Update</button>
+                                    <button type="submit">
+                                        Update
+                                    </button>
                                 </form>
+
+                            {% else %}
+
+                                <span class="protected">
+                                    Protected
+                                </span>
+
                             {% endif %}
+
                         </td>
 
-                        <td>
+                        <!-- Password reset -->
+                        <td class="reset-cell">
+
                             {% if user.role != "admin" and user.id != current_user.id %}
+
                                 <form method="POST"
                                       action="{{ url_for('documents.admin_reset_password', user_id=user.id) }}">
-                                    <input type="hidden" name="csrf_token"
+
+                                    <input type="hidden"
+                                           name="csrf_token"
                                            value="{{ csrf_token() }}">
+
+                                    <input
+                                        type="password"
+                                        name="temporary_password"
+                                        placeholder="Temporary password"
+                                        minlength="8"
+                                        pattern="(?=.*[A-Z])(?=.*[a-z])(?=.*[0-9])(?=.*[^A-Za-z0-9\s]).{8,}"
+                                        title="At least 8 characters, including uppercase, lowercase, number and special character."
+                                        autocomplete="new-password"
+                                        required
+                                    >
+
+                                    <span class="hint">
+                                        8+ characters, uppercase, lowercase,
+                                        number and special character.
+                                    </span>
+
                                     <button type="submit" class="reset-button">
                                         Reset Password
                                     </button>
+
                                 </form>
+
                             {% else %}
-                                <span class="protected">Protected</span>
+
+                                <span class="protected">
+                                    Protected
+                                </span>
+
                             {% endif %}
+
                         </td>
                     </tr>
+
                     {% else %}
+
                     <tr>
-                        <td colspan="6" class="empty">No users found.</td>
+                        <td colspan="6" class="empty">
+                            No users found.
+                        </td>
                     </tr>
+
                     {% endfor %}
                 </tbody>
             </table>
         </div>
+
     </main>
 </body>
 </html>
